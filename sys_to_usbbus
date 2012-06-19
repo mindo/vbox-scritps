@@ -1,0 +1,45 @@
+#!/bin/bash
+#
+#(c) 2008 Luciano Rocha (luciano@nsk.pt) Armindo Silva (deathon2legs@gmail.com)
+#
+#Permission to use, copy, modify, and/or distribute this software for any
+#purpose with or without fee is hereby granted, provided that the above
+#copyright notice and this permission notice appear in all copies.
+
+#THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+#WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+#MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+#ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+#WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+#ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+#OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+
+err() { echo "${FUNCNAME:+$FUNCNAME: }$*" 1>&2; exit 1; }
+
+PATH=$PATH:/usr/sbin:/sbin
+
+[ $# -eq 1 ] || err "$0 <device>"
+
+dev=$(udevadm info --name=$1 --query=path) || exit 1
+
+if [ -n "${dev##/devices*}" ]; then
+	# use readlink to get to the device
+	dev=$(readlink -f /sys/$dev/device)
+fi
+
+[ -n "$dev" ] || err "invalid device specification: $1"
+
+udevadm info -e | grep -B1 bus/usb/ | (
+	usb=
+	l=0
+
+	while read p sys && read n usbdev && { read dash ||:; }; do
+		if echo $dev | fgrep -q -- $sys && [ ${#sys} -gt $l ]; then
+			usb=$usbdev
+			l=${#sys}
+		fi
+	done
+	[ -n "$usb" ] || err "not an usb device: $1"
+	echo $usb
+)

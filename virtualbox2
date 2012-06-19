@@ -1,0 +1,66 @@
+#!/bin/bash
+#
+#(c) 2008 Armindo Silva (deathon2legs@gmail.com
+#
+#Permission to use, copy, modify, and/or distribute this software for any
+#purpose with or without fee is hereby granted, provided that the above
+#copyright notice and this permission notice appear in all copies.
+
+#THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+#WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+#MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+#ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+#WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+#ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+#OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+
+log() {
+	   echo "$1"
+	   logger -t virtualbox "$1"
+
+}
+
+device=$1
+log "device= $device"
+
+# get user that run virtualbox
+USER=`ps -C VBoxXPCOMIPCD -o user=`
+if [ -z "${USER}" ]; then
+    log "no virtualbox running, exit"
+        exit 1
+fi
+
+log "user= $USER"
+
+VM=`ps ax |  grep "virtualbox/VB" | head -n 1 | awk -F " " '{print $7}'`
+if [ -z "${VM}" ]; then
+	VM=`ps ax |  grep "virtualbox/VBoxH" | head -n 1 | awk -F " " '{print $7}'`
+fi
+if [ -z "${VM}" ]; then
+	VM=`ps ax |  grep "startvm" | head -n 1 | awk -F " " '{print $7}'`
+fi
+log "VM= $VM"
+
+# get usb path like '/proc/bus/usb/005/014'
+USBPATH="/proc/$(/home/$USER/scripts/sys_to_usbbus $device)"
+log "usbpath= '$USBPATH'"
+
+# when a device is physically removed there's no way to detach it
+# and because of that, sometimes, VirtualBox attachs a device but
+# the guest can't see it.
+# WORKAROUND: attach -> detach -> attach 
+
+
+log "starting usb insertion"
+echo "###### NEW USB DEVICE $(date) ######">> /home/$USER/log/usb.log
+su - ${USER} -c "VBoxManage controlvm ${VM} usbattach ${USBPATH}" >> /home/$USER/log/usb.log
+log "done.."
+log "Disconnecting $USBPATH"
+su - ${USER} -c  "VBoxManage controlvm ${VM} usbdetach ${USBPATH}" >> /home/$USER/log/usb.log
+log "...connectting"
+su - ${USER} -c "VBoxManage controlvm ${VM} usbattach ${USBPATH}" >> /home/$USER/log/usb.log
+log "done.."
+
+exit 0
+
